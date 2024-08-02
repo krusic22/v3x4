@@ -3,6 +3,9 @@
 #include <Library/BaseMemoryLib.h>
 #include <Library/PrePiLib.h>
 #include <Protocol/MpService.h>
+#include <Uefi.h>
+#include <Library/UefiRuntimeServicesTableLib.h>
+#include <Library/BaseLib.h>
 
 // SVID fixed VCCIN voltages
 #define				_DYNAMIC_SVID				0x0				// FIVR-controlled SVID
@@ -30,7 +33,7 @@
 #define				_VCCIN_2pt100				0x00000867			// 2.100 V
 
 // Adaptive negative dynamic voltage offsets for all domains
-#define				_DEFAULT_FVID				0x0				// no change to default VID (Vcore)
+#define				_DEFAULT_FVID				0x0			        // no change to default VID (Vcore)
 #define				_FVID_MINUS_10_MV			0xFEC00000			// -10 mV  (-0.010 V)
 #define				_FVID_MINUS_20_MV			0xFD800000			// -20 mV  (-0.020 V)
 #define				_FVID_MINUS_25_MV			0xFCD00000			// -25 mV  (-0.025 V)
@@ -86,7 +89,7 @@
 #define				MSR_TURBO_RATIO_LIMIT			0x1AD
 #define				MSR_TURBO_RATIO_LIMIT1 			0x1AE
 #define				MSR_TURBO_RATIO_LIMIT2 			0x1AF
-#define				MSR_TURBO_POWER_LIMIT			0x610	
+#define				MSR_TURBO_POWER_LIMIT			0x610
 #define				MSR_UNCORE_RATIO_LIMIT			0x620
 
 // constants
@@ -100,7 +103,7 @@
 #define				UNLIMITED_POWER				0x00FFFFFF00FFFFFF
 
 // build options
-#define				BUILD_RELEASE_VER			L"v3x4-v1.00-release"		// build version
+#define				BUILD_RELEASE_VER			L"v3x4-v1.22-release"		// build version
 #define				BUILD_TARGET_CPU_DESC			L"\"Haswell-E/EP(4S)/EX\""	// target CPU description (codename)
 #define				BUILD_TARGET_CPUID_SIGN_1		0x306F2				// target CPUID, set 0xFFFFFFFF to bypass checking
 #define				BUILD_TARGET_CPUID_SIGN_2		0x306F3				// target CPUID, set 0xFFFFFFFF to bypass checking
@@ -110,28 +113,28 @@
 // driver settings
 const UINTN			CPU_SET_MAX_TURBO_RATIO		=	0;				// 0 for auto max: Core turbo ratio, not to exceed fused limit, no less than MFM (8)
 const UINTN			CPU_SET_MAX_UNCORE_RATIO	=	0;				// 0 for auto max: Uncore ratio, not to exceed fused limit, no less than 12
-const BOOLEAN			CPU_SET_FIXED_VCCIN		=	FALSE;				// set fixed VCCIN (reboot required)
+const BOOLEAN			CPU_SET_FIXED_VCCIN		=	TRUE;				// set fixed VCCIN (reboot required)
 const BOOLEAN			CPU_SET_OC_LOCK			=	FALSE;				// set Overlocking Lock at completion of programming
 const BOOLEAN			UNCORE_PERF_PLIMIT_OVRD_EN	=	FALSE;				// disable Uncore P-states (i.e. force max frequency)
-const BOOLEAN			FIVR_FAULTS_OVRD_EN		=	FALSE;				// disable FIVR Faults (TRUE if PowerCut Enabled)
-const BOOLEAN			FIVR_EFF_MODE_OVRD_EN		=	FALSE;				// disable FIVR Efficiency Mode (TRUE if PowerCut Enabled)
-const BOOLEAN			FIVR_DYN_SVID_CONTROL_DIS	=	FALSE;				// disable FIVR SVID Control ("PowerCut"), forces CPU_SET_FIXED_VCCIN = TRUE
+const BOOLEAN			FIVR_FAULTS_OVRD_EN		=	TRUE;				// disable FIVR Faults (TRUE if PowerCut Enabled)
+const BOOLEAN			FIVR_EFF_MODE_OVRD_EN		=	TRUE;				// disable FIVR Efficiency Mode (TRUE if PowerCut Enabled)
+const BOOLEAN			FIVR_DYN_SVID_CONTROL_DIS	=	TRUE;				// disable FIVR SVID Control ("PowerCut"), forces CPU_SET_FIXED_VCCIN = TRUE
 
 // Serial Voltage Identification (SVID) fixed voltages per package, adjust as needed
 const UINT32 SVID_FIXED_VCCIN[MAX_PACKAGE_COUNT] \
-	= { _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID, _DYNAMIC_SVID };
+	= { _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800, _VCCIN_1pt800 };
 
 // Domain 0 (IA Core) dynamic voltage offsets per package, adjust as needed
 const UINT32 IACORE_ADAPTIVE_OFFSET[MAX_PACKAGE_COUNT] \
-	= { _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID };
+	= { _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV };
 
 // Domain 2 (CLR) dynamic voltage offsets per package, adjust as needed
 const UINT32 CLR_ADAPTIVE_OFFSET[MAX_PACKAGE_COUNT] \
-	= { _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID };
+	= { _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV };
 
 // Domain 3 (SA) dynamic voltage offsets per package, adjust as needed
 const UINT32 SA_ADAPTIVE_OFFSET[MAX_PACKAGE_COUNT] \
-	= { _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID, _DEFAULT_FVID };
+	= { _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV, _FVID_MINUS_40_MV };
 
 // objects
 typedef struct _DOMAIN_OBJECT {
@@ -195,17 +198,17 @@ EFIDriverEntry(
 	IN EFI_SYSTEM_TABLE *SystemTable
 ) {
 	EFI_STATUS status;
-	
+
 	// driver init
 	status = SystemTable->ConOut->OutputString(
 		SystemTable->ConOut,
 		L"Intel(R) Xeon(R) Processor Max Effort Turbo Boost UEFI DXE driver\r\n\0"
 		);
 
-	if (EFI_ERROR(status)) { 
+	if (EFI_ERROR(status)) {
 		goto DriverExit;
 	}
-	
+
 	// initialize system data
 	if (EFI_ERROR(InitializeSystem(SystemTable))) {
 		goto DriverExit;
@@ -215,7 +218,7 @@ EFIDriverEntry(
 	if (EFI_ERROR(GatherPlatformInfo(&System->Platform))) {
 		goto DriverExit;
 	}
-	
+
 	// enumerate processors and gather processor data
 	if (EFI_ERROR(EnumeratePackages())) {
 		goto DriverExit;
@@ -227,7 +230,7 @@ EFIDriverEntry(
 		if (System->BootstrapProcessor == System->Package[ThisPackage].APICID) {
 			ProgramPackage(
 				NULL
-				);			
+				);
 		}
 		else {
 			// dispatch AP to program CPU
@@ -250,14 +253,15 @@ EFIDriverEntry(
 			}
 		}
 	}
-	
+
 DriverExit:
-		
+
 	// notify if system reboot required
 	if (System->RebootRequired == TRUE) {
 		Print(
 			L"!!! REBOOT REQUIRED FOR SOME SETTINGS TO TAKE EFFECT !!!\r\n\0"
 			);
+		gRT->ResetSystem(EfiResetWarm, EFI_SUCCESS, 0, NULL);
 	}
 
 	// always return success, no cleanup as everything is automatically destroyed
